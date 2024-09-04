@@ -8,12 +8,12 @@ function App() {
   const handleSend = () => {
     if (input.trim() === "") return;
 
-    setMessages([...messages, { sender: "user", text: input, avatar: "../a1pictures/user.jpg" }]);
+    setMessages([...messages, { sender: "user", text: input, avatar: "a1pictures/user.jpg" }]);
  
     setTimeout(() => {
       setMessages(prevMessages => [
         ...prevMessages,
-        { sender: "bot", text: "I am a simple bot. I don't have real responses yet!", avatar: "../a1pictures/aiassistant.jpg" }
+        { sender: "bot", text: "I am a simple bot. I don't have real responses yet!", avatar: "a1pictures/aiassistant.jpg" }
       ]);
     }, 500);
 
