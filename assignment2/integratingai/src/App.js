@@ -1,93 +1,69 @@
 import React, { useState } from 'react';
 import { csvParse, autoType } from 'd3-dsv';
+import { VegaLite } from 'react-vega';
 import './App.css';
-import DataUpload from './uploadcsv';
-import axios from 'axios';
-
-async function getVegaLiteSpec(question, dataSummary) {
-  const response = await axios.post('https://api.openai.com/v1/completions', {
-    model: "text-davinci-003",
-    prompt: `Generate a Vega-lite JSON specification to visualize the following data: ${dataSummary}. Question: ${question}`,
-    max_tokens: 150,
-  }, {
-    headers: {
-      'Authorization': `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`
-    }
-  });
-  return response.data.choices[0].text;
-}
-
-function parseCSV(file) {
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    const text = event.target.result;
-    const data = csvParse(text, autoType);
-    console.log(data); 
-  };
-  reader.readAsText(file);
-}
 
 function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [data, setData] = useState(null);
+  const [vegaSpec, setVegaSpec] = useState(null);
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsedData = csvParse(e.target.result, autoType);
+          setData(parsedData);
+          setMessages(prevMessages => [
+            ...prevMessages,
+            { sender: "system", text: "Dataset uploaded successfully. You can now ask questions.", avatar: "/public/assn1pictu" }
+          ]);
+        } catch (error) {
+          setMessages(prevMessages => [
+            ...prevMessages,
+            { sender: "system", text: "Failed to parse CSV file.", avatar: "assn1pictures/aiassistant.jpg" }
+          ]);
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
 
   const handleSend = () => {
     if (input.trim() === "") return;
 
     setMessages([...messages, { sender: "user", text: input, avatar: "assn1pictures/user.jpg" }]);
 
-    setTimeout(() => {
-      setMessages(prevMessages => [
-        ...prevMessages,
-        { sender: "bot", text: "I am a simple bot. I don't have real responses yet!", avatar: "assn1pictures/aiassistant.jpg" }
-      ]);
-    }, 500);
+    if (!data) {
+      setTimeout(() => {
+        setMessages(prevMessages => [
+          ...prevMessages,
+          { sender: "bot", text: "Please upload a dataset before sending a message.", avatar: "assn1pictures/aiassistant.jpg" }
+        ]);
+      }, 500);
+    } else {
+      // Placeholder for processing input to generate a Vega-Lite spec
+      setTimeout(() => {
+        const spec = {}; // This would be the result of processing the input against the data
+        setVegaSpec(spec); // Update with actual logic
+        setMessages(prevMessages => [
+          ...prevMessages,
+          { sender: "bot", text: "Here's the visualization based on your query.", avatar: "assn1pictures/aiassistant.jpg" }
+        ]);
+      }, 500);
+    }
 
     setInput("");
   };
 
-  async function fetchVegaLiteSpec(question, dataSummary) {
-    // Implementation to call ChatGPT API
-    // Assume function returns JSON specification as a string
-    // Placeholder implementation
-    return `{}`;
-  }
-  
-  function ChatInterface({ data }) {
-    const [input, setInput] = useState('');
-    const [vegaSpec, setVegaSpec] = useState(null);
-  
-    const handleQuestionSubmit = async () => {
-      if (!data) {
-        alert('Please upload a dataset first.');
-        return;
-      }
-      const dataSummary = summarizeData(data);  
-      const spec = await fetchVegaLiteSpec(input, dataSummary);
-      setVegaSpec(JSON.parse(spec));
-    };
-  
-    return (
-      <div>
-        <input type="text" value={input} onChange={(e) => setInput(e.target.value)} />
-        <button onClick={handleQuestionSubmit}>Ask</button>
-        {vegaSpec && <VegaLite spec={vegaSpec} />}  
-      </div>
-    );
-}
-
-function summarizeData(data) {
-  return data.columns.map(col => ({
-    name: col,
-    type: typeof data[0][col],  
-    sample: data.slice(0, 3).map(row => row[col])  
-  }));
-}
-
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#f9f5f1] p-6">
       <div className="w-full max-w-2xl p-4 bg-white rounded-lg shadow-lg">
-        <h1 className="text-3xl font-semibold mb-4 text-[#4b284e]">AI Assistant</h1>
+        <h1 className="text-3xl font-semibold mb-4 text-[#4b284e]">Data Visualization AI Assistant</h1>
+        <input type="file" accept=".csv" onChange={handleFileUpload} className="mb-4" />
         <div className="mb-4 h-80 overflow-y-auto p-4 rounded-lg bg-[#f0ebe6]">
           {messages.map((message, index) => (
             <div key={index} className={`mb-4 flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
@@ -105,6 +81,7 @@ function summarizeData(data) {
             </div>
           ))}
         </div>
+        {vegaSpec && <VegaLite spec={vegaSpec} className="mb-4" />}
         <div className="flex items-center">
           <input
             className="flex-grow p-3 border rounded-full border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4b284e] text-gray-700"
@@ -127,5 +104,3 @@ function summarizeData(data) {
 }
 
 export default App;
-
-
