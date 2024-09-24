@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { csvParse, autoType } from 'd3-dsv';
 import './App.css';
 import './uploadcsv.js';
 
@@ -20,6 +21,59 @@ function App() {
 
     setInput("");
   };
+
+  async function fetchVegaLiteSpec(question, dataSummary) {
+    // Implementation to call ChatGPT API
+    // Assume function returns JSON specification as a string
+    // Placeholder implementation
+    return `{}`;
+  }
+  
+  function ChatInterface({ data }) {
+    const [input, setInput] = useState('');
+    const [vegaSpec, setVegaSpec] = useState(null);
+  
+    const handleQuestionSubmit = async () => {
+      if (!data) {
+        alert('Please upload a dataset first.');
+        return;
+      }
+      const dataSummary = summarizeData(data);  // Summarize data to provide context to the API
+      const spec = await fetchVegaLiteSpec(input, dataSummary);
+      setVegaSpec(JSON.parse(spec));
+    };
+  
+    return (
+      <div>
+        <input type="text" value={input} onChange={(e) => setInput(e.target.value)} />
+        <button onClick={handleQuestionSubmit}>Ask</button>
+        {vegaSpec && <VegaLite spec={vegaSpec} />}  // React Vega component to render the chart
+      </div>
+    );
+}
+
+function DataUpload({ setDataPreview, setParsedData }) {
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file.type !== "text/csv") {
+      alert("Please upload a CSV file.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result;
+      const data = csvParse(text, autoType);
+      setDataPreview(data.slice(0, 5));  // Show preview of first 5 rows
+      setParsedData(data);  // Store parsed data for later use
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <input type="file" onChange={handleFileChange} accept=".csv" />
+  );
+}
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#f9f5f1] p-6">
