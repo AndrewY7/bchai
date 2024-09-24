@@ -1,7 +1,31 @@
 import React, { useState } from 'react';
 import { csvParse, autoType } from 'd3-dsv';
 import './App.css';
-import './uploadcsv.js';
+import DataUpload from './uploadcsv';
+import axios from 'axios';
+
+async function getVegaLiteSpec(question, dataSummary) {
+  const response = await axios.post('https://api.openai.com/v1/completions', {
+    model: "text-davinci-003",
+    prompt: `Generate a Vega-lite JSON specification to visualize the following data: ${dataSummary}. Question: ${question}`,
+    max_tokens: 150,
+  }, {
+    headers: {
+      'Authorization': `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`
+    }
+  });
+  return response.data.choices[0].text;
+}
+
+function parseCSV(file) {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const text = event.target.result;
+    const data = csvParse(text, autoType);
+    console.log(data); 
+  };
+  reader.readAsText(file);
+}
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -38,7 +62,7 @@ function App() {
         alert('Please upload a dataset first.');
         return;
       }
-      const dataSummary = summarizeData(data);  // Summarize data to provide context to the API
+      const dataSummary = summarizeData(data);  
       const spec = await fetchVegaLiteSpec(input, dataSummary);
       setVegaSpec(JSON.parse(spec));
     };
@@ -47,32 +71,17 @@ function App() {
       <div>
         <input type="text" value={input} onChange={(e) => setInput(e.target.value)} />
         <button onClick={handleQuestionSubmit}>Ask</button>
-        {vegaSpec && <VegaLite spec={vegaSpec} />}  // React Vega component to render the chart
+        {vegaSpec && <VegaLite spec={vegaSpec} />}  
       </div>
     );
 }
 
-function DataUpload({ setDataPreview, setParsedData }) {
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file.type !== "text/csv") {
-      alert("Please upload a CSV file.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = reader.result;
-      const data = csvParse(text, autoType);
-      setDataPreview(data.slice(0, 5));  // Show preview of first 5 rows
-      setParsedData(data);  // Store parsed data for later use
-    };
-    reader.readAsText(file);
-  };
-
-  return (
-    <input type="file" onChange={handleFileChange} accept=".csv" />
-  );
+function summarizeData(data) {
+  return data.columns.map(col => ({
+    name: col,
+    type: typeof data[0][col],  
+    sample: data.slice(0, 3).map(row => row[col])  
+  }));
 }
 
   return (
