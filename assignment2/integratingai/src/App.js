@@ -1,9 +1,10 @@
-// App.js
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; 
 import { csvParse, autoType } from 'd3-dsv';
 import { VegaLite } from 'react-vega';
 import axios from 'axios';
 import { FileUpload, DataPreview } from './csvhandle.js';
+import userAvatar from './assn1pictures/user.jpg';
+import assistantAvatar from './assn1pictures/aiassistant.jpg';
 
 function ChartRenderer({ spec }) {
   try {
@@ -23,6 +24,13 @@ function Chatbot({ data }) {
   const [conversationHistory, setConversationHistory] = useState([]);
   const [chartSpec, setChartSpec] = useState(null);
   const [description, setDescription] = useState('');
+
+  const conversationEndRef = useRef(null); 
+  useEffect(() => {
+    if (conversationEndRef.current) {
+      conversationEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [conversationHistory]);
 
   const getDatasetInfo = (data) => {
     const columns = Object.keys(data[0]);
@@ -96,7 +104,7 @@ function Chatbot({ data }) {
   return (
     <div className="flex flex-col flex-grow">
       {/* Conversation History */}
-      <div className="flex-grow overflow-y-auto p-4 rounded-lg bg-[#f0ebe6]">
+      <div className="flex-grow overflow-y-auto p-4 rounded-lg bg-[#f0ebe6] h-64">
         {conversationHistory.map((message, index) => (
           <div
             key={index}
@@ -104,13 +112,16 @@ function Chatbot({ data }) {
               message.sender === 'user' ? 'justify-end' : 'justify-start'
             }`}
           >
-            <div className="flex items-center">
-              {/* Optional Avatar */}
-              {/* <img
+            <div
+              className={`flex items-center ${
+                message.sender === 'user' ? 'flex-row-reverse' : ''
+              }`}
+            >
+              <img
                 src={message.sender === 'user' ? userAvatar : assistantAvatar}
                 alt="avatar"
-                className="w-8 h-8 rounded-full mr-2"
-              /> */}
+                className="w-8 h-8 rounded-full mx-2"
+              />
               <div>
                 <div
                   className={`text-sm ${
@@ -132,6 +143,7 @@ function Chatbot({ data }) {
             </div>
           </div>
         ))}
+        <div ref={conversationEndRef} /> {/* Dummy div to scroll into view */}
       </div>
 
       {/* Chart Renderer */}
