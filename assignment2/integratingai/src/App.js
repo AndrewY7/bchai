@@ -7,6 +7,10 @@ import userAvatar from './assn1pictures/user.jpg';
 import assistantAvatar from './assn1pictures/aiassistant.jpg';
 
 function ChartRenderer({ spec }) {
+  if (!spec) {
+    return null; 
+  }
+
   try {
     return (
       <div className="mt-6">
@@ -14,9 +18,37 @@ function ChartRenderer({ spec }) {
       </div>
     );
   } catch (error) {
-    alert('Failed to render the chart. Please try a different query.');
-    return null;
+    console.error('Error rendering chart:', error);
+    return <p className="mt-4 text-red-600">Failed to render the chart. Please try a different query.</p>;
   }
+}
+
+function getDatasetInfo(data) {
+  const columns = Object.keys(data[0]);
+  const sampleRows = data.slice(0, 5);
+  const dataTypes = {};
+
+  columns.forEach((col) => {
+    const values = data.map((row) => row[col]);
+    dataTypes[col] = inferVegaLiteType(values);
+  });
+
+  return { columns, dataTypes, sampleRows };
+}
+
+function inferVegaLiteType(values) {
+  const sampleValues = values.slice(0, 10);
+  const allNumbers = sampleValues.every((v) => typeof v === 'number' && !isNaN(v));
+  if (allNumbers) {
+    return 'quantitative';
+  }
+
+  const allDates = sampleValues.every((v) => v instanceof Date || !isNaN(Date.parse(v)));
+  if (allDates) {
+    return 'temporal';
+  }
+
+  return 'nominal';
 }
 
 function Chatbot({ data }) {
@@ -32,37 +64,31 @@ function Chatbot({ data }) {
     }
   }, [conversationHistory]);
 
-  const getDatasetInfo = (data) => {
-    const columns = Object.keys(data[0]);
-    const sampleRows = data.slice(0, 5);
-    const dataTypes = {};
-
-    columns.forEach((col) => {
-      dataTypes[col] = typeof data[0][col];
-    });
-
-    return { columns, dataTypes, sampleRows };
-  };
-
-  const constructPrompt = (userQuery, datasetInfo) => {
-    return `
-      You are a data visualization assistant. Given the dataset with columns: ${JSON.stringify(
-        datasetInfo.columns
-      )}, data types: ${JSON.stringify(
-      datasetInfo.dataTypes
-    )}, and sample data: ${JSON.stringify(
-      datasetInfo.sampleRows
-    )}, generate a Vega-Lite JSON specification for the following query: "${userQuery}". Provide a brief description of the chart.
-
-      If the query is unrelated to the dataset or cannot be answered, please inform the user politely.
-    `;
-  };
+  function constructPrompt(userQuery, datasetInfo) {
+    return `You are a data visualization assistant.
+            Given the following dataset information:
+            - Columns and their data types: ${JSON.stringify(datasetInfo.dataTypes)}
+            - Sample data: ${JSON.stringify(datasetInfo.sampleRows, null, 2)}
+            Generate a Vega-Lite JSON specification that visualizes the data to answer the following user query:
+            "${userQuery}"
+            Ensure that the specification is valid JSON and uses appropriate data transformations and encodings.
+            Also, provide a brief description of the chart in plain English.
+            Provide your response in the following JSON format:
+  
+            {
+              "chartSpec": { /* Vega-Lite JSON specification */ },
+              "description": "/* Brief description of the chart in plain English */"
+            }
+            
+            Do not include any additional text or explanations outside of the JSON format.
+            If the query is unrelated to the dataset or cannot be answered, please inform the user politely.`;
+  }
 
   const handleSendQuery = async () => {
     if (!userQuery) return;
-
+  
     const newHistory = [...conversationHistory, { sender: 'user', text: userQuery }];
-
+  
     if (!data) {
       setConversationHistory([
         ...newHistory,
@@ -71,18 +97,17 @@ function Chatbot({ data }) {
       setUserQuery('');
       return;
     }
-
+  
     const datasetInfo = getDatasetInfo(data);
     const prompt = constructPrompt(userQuery, datasetInfo);
-
+  
     try {
       const response = await axios.post('/api/generate-chart', {
         prompt: prompt,
-        conversationHistory: conversationHistory,
       });
-
+  
       const { chart, description } = response.data;
-
+  
       setChartSpec(chart);
       setDescription(description);
       setConversationHistory([
@@ -91,19 +116,23 @@ function Chatbot({ data }) {
       ]);
       setUserQuery('');
     } catch (error) {
-      alert('An error occurred while generating the chart.');
+      console.error('Error:', error.response ? error.response.data : error.message);
+      setConversationHistory([
+        ...newHistory,
+        { sender: 'assistant', text: 'An error occurred while generating the chart.' },
+      ]);
     }
   };
 
-  const handleInputKeyPress = (e) => {
+  const handleInputKeyDown = (e) => {
     if (e.key === 'Enter') {
       handleSendQuery();
+      setUserQuery(''); 
     }
   };
 
   return (
     <div className="flex flex-col flex-grow">
-      {/* Conversation History */}
       <div className="flex-grow overflow-y-auto p-4 rounded-lg bg-[#f0ebe6] h-64">
         {conversationHistory.map((message, index) => (
           <div
@@ -158,7 +187,7 @@ function Chatbot({ data }) {
           placeholder="Type your message here"
           value={userQuery}
           onChange={(e) => setUserQuery(e.target.value)}
-          onKeyPress={handleInputKeyPress}
+          onKeyDown={handleInputKeyDown}
         />
         <button
           className="ml-2 px-6 py-3 bg-[#4b284e] text-white rounded-full hover:bg-[#5c3c5c] focus:outline-none focus:ring-2 focus:ring-[#4b284e]"
@@ -174,8 +203,7 @@ function Chatbot({ data }) {
 function App() {
   const [data, setData] = useState(null);
 
-  const handleFileUploaded = (csvText) => {
-    const parsedData = parseCSVData(csvText);
+  const handleFileUploaded = (parsedData) => {
     setData(parsedData);
   };
 

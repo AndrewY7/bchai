@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { csvParse, autoType } from 'd3-dsv'; 
 
 function FileUpload({ onFileUploaded }) {
     const onDrop = (acceptedFiles) => {
@@ -12,7 +13,9 @@ function FileUpload({ onFileUploaded }) {
 
         const reader = new FileReader();
         reader.onload = () => {
-            onFileUploaded(reader.result);
+            const csvText = reader.result;
+            const data = csvParse(csvText, autoType);
+            onFileUploaded(data);
         };
         reader.readAsText(file);
     };
@@ -45,7 +48,6 @@ function DataPreview({ data }) {
 
   return (
     <div>
-      {/* Center the button and apply styling */}
       <div className="flex justify-center">
         <button
           onClick={() => setIsTableVisible(!isTableVisible)}
