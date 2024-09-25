@@ -39,56 +39,56 @@ function FileUpload({ onFileUploaded }) {
 }
 
 function DataPreview({ data }) {
-    const [isTableVisible, setIsTableVisible] = useState(true);
+  const [isTableVisible, setIsTableVisible] = useState(false);
 
-    const previewData = data.slice(0, 10);
+  const previewData = data.slice(0, 10);
 
-    return (
-        <div>
-            {/* Center the button and apply styling */}
-            <div className="flex justify-center">
-                <button
-                    onClick={() => setIsTableVisible(!isTableVisible)}
-                    className="mt-4 mb-2 p-2 bg-gray-500 rounded text-[#281332]"
-                >
-                    {isTableVisible ? 'Hide Table Preview' : 'Show Table Preview'}
-                </button>
-            </div>
+  return (
+    <div>
+      {/* Center the button and apply styling */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => setIsTableVisible(!isTableVisible)}
+          className="mt-4 mb-2 px-6 py-2 bg-gray-200 rounded-full text-[#281332]"
+        >
+          {isTableVisible ? 'Hide Table Preview' : 'Show Table Preview'}
+        </button>
+      </div>
 
-            {isTableVisible && (
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 border">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                {Object.keys(previewData[0]).map((key) => (
-                                    <th
-                                        key={key}
-                                        className="px-4 py-2 text-left text-xs font-medium text-[#281332] uppercase tracking-wider"
-                                    >
-                                        {key}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {previewData.map((row, index) => (
-                                <tr key={index}>
-                                    {Object.values(row).map((value, idx) => (
-                                        <td
-                                            key={idx}
-                                            className="px-4 py-2 whitespace-nowrap text-sm text-[#281332]"
-                                        >
-                                            {value !== null ? value.toString() : ''}
-                                        </td>
-                                    ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+      {isTableVisible && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 border">
+            <thead className="bg-gray-50">
+              <tr>
+                {Object.keys(previewData[0]).map((key) => (
+                  <th
+                    key={key}
+                    className="px-4 py-2 text-left text-xs font-medium text-[#281332] uppercase tracking-wider"
+                  >
+                    {key}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {previewData.map((row, index) => (
+                <tr key={index}>
+                  {Object.values(row).map((value, idx) => (
+                    <td
+                      key={idx}
+                      className="px-4 py-2 whitespace-nowrap text-sm text-[#281332]"
+                    >
+                      {value !== null ? value.toString() : ''}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-    );
+      )}
+    </div>
+  );
 }
 
 export { FileUpload, DataPreview };
