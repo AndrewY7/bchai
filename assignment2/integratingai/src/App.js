@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'; 
-import { csvParse, autoType } from 'd3-dsv';
+// App.js
+
+import React, { useState, useEffect, useRef } from 'react';
 import { VegaLite } from 'react-vega';
 import axios from 'axios';
 import { FileUpload, DataPreview } from './csvhandle.js';
@@ -8,56 +9,32 @@ import assistantAvatar from './assn1pictures/aiassistant.jpg';
 
 function ChartRenderer({ spec }) {
   if (!spec) {
-    return null; 
+    return null;
   }
 
   try {
     return (
-      <div className="mt-6">
+      <div className="mt-4">
         <VegaLite spec={spec} />
       </div>
     );
   } catch (error) {
     console.error('Error rendering chart:', error);
-    return <p className="mt-4 text-red-600">Failed to render the chart. Please try a different query.</p>;
+    return (
+      <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+        <p>Failed to render the chart. Please check the chart specification.</p>
+        <pre>{error.message}</pre>
+      </div>
+    );
   }
-}
-
-function getDatasetInfo(data) {
-  const columns = Object.keys(data[0]);
-  const sampleRows = data.slice(0, 5);
-  const dataTypes = {};
-
-  columns.forEach((col) => {
-    const values = data.map((row) => row[col]);
-    dataTypes[col] = inferVegaLiteType(values);
-  });
-
-  return { columns, dataTypes, sampleRows };
-}
-
-function inferVegaLiteType(values) {
-  const sampleValues = values.slice(0, 10);
-  const allNumbers = sampleValues.every((v) => typeof v === 'number' && !isNaN(v));
-  if (allNumbers) {
-    return 'quantitative';
-  }
-
-  const allDates = sampleValues.every((v) => v instanceof Date || !isNaN(Date.parse(v)));
-  if (allDates) {
-    return 'temporal';
-  }
-
-  return 'nominal';
 }
 
 function Chatbot({ data }) {
   const [userQuery, setUserQuery] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [chartSpec, setChartSpec] = useState(null);
-  const [description, setDescription] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // Loading state
 
-  const conversationEndRef = useRef(null); 
+  const conversationEndRef = useRef(null);
   useEffect(() => {
     if (conversationEndRef.current) {
       conversationEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -65,75 +42,100 @@ function Chatbot({ data }) {
   }, [conversationHistory]);
 
   function constructPrompt(userQuery, datasetInfo) {
-    return `You are a data visualization assistant.
-            Given the following dataset information:
-            - Columns and their data types: ${JSON.stringify(datasetInfo.dataTypes)}
-            - Sample data: ${JSON.stringify(datasetInfo.sampleRows, null, 2)}
-            Generate a Vega-Lite JSON specification that visualizes the data to answer the following user query:
-            "${userQuery}"
-            Ensure that the specification is valid JSON and uses appropriate data transformations and encodings.
-            Also, provide a brief description of the chart in plain English.
-            Provide your response in the following JSON format:
-  
-            {
-              "chartSpec": { /* Vega-Lite JSON specification */ },
-              "description": "/* Brief description of the chart in plain English */"
-            }
-            
-            Do not include any additional text or explanations outside of the JSON format.
-            If the query is unrelated to the dataset or cannot be answered, please inform the user politely.`;
+    return `Given the dataset with columns and data types: ${JSON.stringify(datasetInfo.dataTypes)}, 
+    generate a Vega-Lite JSON specification to answer the query: "${userQuery}". 
+    Use only the existing fields from the dataset. Do not introduce new fields or modify existing ones.
+
+    Provide the result in the following JSON format:
+
+    {
+      "chartSpec": { /* Vega-Lite JSON specification */ },
+      "description": "/* Brief description of the chart in plain English */"
+    }
+    
+    Ensure that all field names in the specification match exactly those in the dataset.
+    
+    Only provide the JSON response without any additional text. 
+    If the query cannot be answered with the dataset, inform the user politely.`;
   }
 
   const handleSendQuery = async () => {
-    if (!userQuery) return;
-  
-    const newHistory = [...conversationHistory, { sender: 'user', text: userQuery }];
-  
+    if (!userQuery || isLoading) {
+      console.log('handleSendQuery: Request blocked (isLoading or empty query)');
+      return; // Prevent multiple requests
+    }
+
+    console.log('handleSendQuery: Sending request');
+    setIsLoading(true);
+
+    const newHistory = [
+      ...conversationHistory,
+      { sender: 'user', text: userQuery },
+    ];
+
     if (!data) {
       setConversationHistory([
         ...newHistory,
         { sender: 'assistant', text: 'Please upload a dataset before sending a message.' },
       ]);
+      setIsLoading(false); // Reset loading state
       setUserQuery('');
       return;
     }
-  
+
     const datasetInfo = getDatasetInfo(data);
     const prompt = constructPrompt(userQuery, datasetInfo);
-  
+
     try {
-      const response = await axios.post('/api/generate-chart', {
+      console.log('Sending request to server with prompt:', prompt);
+
+      const response = await axios.post('http://localhost:5001/api/generate-chart', {
         prompt: prompt,
       });
-  
-      const { chart, description } = response.data;
-  
-      setChartSpec(chart);
-      setDescription(description);
+
+      const { chartSpec, description } = response.data; // Correct destructuring
+
+      console.log('Received chartSpec:', chartSpec);
+      console.log('Received description:', description);
+
       setConversationHistory([
         ...newHistory,
-        { sender: 'assistant', text: description },
+        { sender: 'assistant', text: description, chartSpec: chartSpec },
       ]);
       setUserQuery('');
     } catch (error) {
       console.error('Error:', error.response ? error.response.data : error.message);
+
+      let errorMessage = 'An error occurred while generating the chart.';
+
+      if (error.response) {
+        if (error.response.status === 429) {
+          errorMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+        } else {
+          errorMessage = error.response.data.error || errorMessage;
+        }
+      }
+
       setConversationHistory([
         ...newHistory,
-        { sender: 'assistant', text: 'An error occurred while generating the chart.' },
+        { sender: 'assistant', text: errorMessage },
       ]);
+    } finally {
+      console.log('handleSendQuery: Request finished');
+      setIsLoading(false); // Reset loading state
     }
   };
 
   const handleInputKeyDown = (e) => {
     if (e.key === 'Enter') {
+      console.log('handleInputKeyDown: Enter key pressed');
       handleSendQuery();
-      setUserQuery(''); 
     }
   };
 
   return (
     <div className="flex flex-col flex-grow">
-      <div className="flex-grow overflow-y-auto p-4 rounded-lg bg-[#f0ebe6] h-64">
+      <div className="flex-grow overflow-y-auto p-4 rounded-lg bg-[#f0ebe6]">
         {conversationHistory.map((message, index) => (
           <div
             key={index}
@@ -142,7 +144,7 @@ function Chatbot({ data }) {
             }`}
           >
             <div
-              className={`flex items-center ${
+              className={`flex items-start ${
                 message.sender === 'user' ? 'flex-row-reverse' : ''
               }`}
             >
@@ -168,18 +170,18 @@ function Chatbot({ data }) {
                 >
                   {message.text}
                 </div>
+                {message.sender === 'assistant' && message.chartSpec && (
+                  <ChartRenderer spec={message.chartSpec} />
+                )}
               </div>
             </div>
           </div>
         ))}
-        <div ref={conversationEndRef} /> {/* Dummy div to scroll into view */}
+        <div ref={conversationEndRef} />
       </div>
 
-      {/* Chart Renderer */}
-      {chartSpec && <ChartRenderer spec={chartSpec} />}
-      {description && <p className="mt-4 text-gray-700">{description}</p>}
-
-      {/* Input and Send Button */}
+      {/* Removed separate chartSpec and description rendering */}
+      
       <div className="flex items-center mt-4">
         <input
           className="flex-grow p-3 border rounded-full border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4b284e] text-gray-700"
@@ -190,14 +192,48 @@ function Chatbot({ data }) {
           onKeyDown={handleInputKeyDown}
         />
         <button
-          className="ml-2 px-6 py-3 bg-[#4b284e] text-white rounded-full hover:bg-[#5c3c5c] focus:outline-none focus:ring-2 focus:ring-[#4b284e]"
+          className={`ml-2 px-6 py-3 bg-[#4b284e] text-white rounded-full hover:bg-[#5c3c5c] focus:outline-none focus:ring-2 focus:ring-[#4b284e] ${
+            isLoading ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
           onClick={handleSendQuery}
+          disabled={isLoading} // Disable button when loading
         >
-          Send
+          {isLoading ? 'Sending...' : 'Send'}
         </button>
       </div>
     </div>
   );
+}
+
+function getDatasetInfo(data) {
+  const columns = Object.keys(data[0]);
+  const dataTypes = {};
+
+  columns.forEach((col) => {
+    const values = data.map((row) => row[col]);
+    dataTypes[col] = inferVegaLiteType(values);
+  });
+
+  return { columns, dataTypes };
+}
+
+function inferVegaLiteType(values) {
+  const sampleValues = values.slice(0, 10);
+  const allNumbers = sampleValues.every(
+    (v) => typeof v === 'number' && !isNaN(v)
+  );
+  if (allNumbers) {
+    return 'quantitative';
+  }
+
+  const allDates = sampleValues.every(
+    (v) => v instanceof Date || !isNaN(Date.parse(v))
+  );
+  if (allDates) {
+    return 'temporal';
+  }
+
+  return 'nominal';
 }
 
 function App() {
@@ -205,11 +241,6 @@ function App() {
 
   const handleFileUploaded = (parsedData) => {
     setData(parsedData);
-  };
-
-  const parseCSVData = (csvText) => {
-    const data = csvParse(csvText, autoType);
-    return data;
   };
 
   return (
