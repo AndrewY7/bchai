@@ -12,13 +12,14 @@ const allowedOrigins = [
   'https://andrewy7.github.io/bchai/', 
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-}));
+};
 
+app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 const limiter = rateLimit({
