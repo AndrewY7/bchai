@@ -1,5 +1,4 @@
 // App.js
-
 import React, { useState, useEffect, useRef } from 'react';
 import { VegaLite } from 'react-vega';
 import axios from 'axios';
@@ -32,37 +31,62 @@ function ChartRenderer({ spec }) {
 function Chatbot({ data }) {
   const [userQuery, setUserQuery] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [isLoading, setIsLoading] = useState(false); // Loading state
+  const [isLoading, setIsLoading] = useState(false);
 
-  const conversationEndRef = useRef(null);
+  // Ref for the conversation container
+  const conversationContainerRef = useRef(null);
+
   useEffect(() => {
-    if (conversationEndRef.current) {
-      conversationEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (conversationContainerRef.current) {
+      conversationContainerRef.current.scrollTop = conversationContainerRef.current.scrollHeight;
     }
   }, [conversationHistory]);
 
   function constructPrompt(userQuery, datasetInfo) {
-    return `Given the dataset with columns and data types: ${JSON.stringify(datasetInfo.dataTypes)}, 
-    generate a Vega-Lite JSON specification to answer the query: "${userQuery}". 
-    Use only the existing fields from the dataset. Do not introduce new fields or modify existing ones.
+    return `You are an AI assistant that generates Vega-Lite v5 specifications based on user queries and provided dataset information.
+      Given the dataset information below, generate a Vega-Lite JSON specification to answer the user's query. If the dataset is too large or granular, perform sensible aggregation (e.g., mean, sum, or count) on relevant fields to provide a more general visualization.
 
-    Provide the result in the following JSON format:
+      **Dataset Information:**
+      ${JSON.stringify(datasetInfo, null, 2)}
 
-    {
-      "chartSpec": { /* Vega-Lite JSON specification */ },
-      "description": "/* Brief description of the chart in plain English */"
+      **User Query:**
+      ${userQuery}
+
+      **Instructions:**
+      - Generate a Vega-Lite specification (\`chartSpec\`) that effectively visualizes the data based on the query.
+      - If the data contains too many points, use aggregation or sampling where appropriate.
+      - Provide a brief description of the chart in plain English (\`description\`).
+
+      **Response Format:**
+      {
+        "chartSpec": { /* Vega-Lite JSON specification */ },
+        "description": "/* Brief description of the chart in plain English */"
+      }
+
+      Ensure that:
+      - The \`$schema\` in \`chartSpec\` is set to "https://vega.github.io/schema/vega-lite/v5.json".
+      - All field names in the specification match exactly those in the dataset.
+      - Include the "data" property in the chartSpec with the "values" key set to an empty array. The actual data will be injected later.
+
+      Only provide the JSON response without any additional text. If the query cannot be answered with the dataset, inform the user politely.`;
+  }
+
+  function validateDataset(data) {
+    if (!data || data.length === 0) {
+      return 'The uploaded dataset is empty. Please provide a valid CSV file.';
     }
-    
-    Ensure that all field names in the specification match exactly those in the dataset.
-    
-    Only provide the JSON response without any additional text. 
-    If the query cannot be answered with the dataset, inform the user politely.`;
+    return null; // No issues
+  }
+
+  function shouldGenerateChart(query) {
+    const visualizationTerms = ['visualize', 'chart', 'graph', 'plot', 'show', 'display', 'compare', 'trend'];
+    return visualizationTerms.some(term => query.toLowerCase().includes(term));
   }
 
   const handleSendQuery = async () => {
-    if (!userQuery || isLoading) {
+    if (!userQuery.trim() || isLoading) {
       console.log('handleSendQuery: Request blocked (isLoading or empty query)');
-      return; // Prevent multiple requests
+      return;
     }
 
     console.log('handleSendQuery: Sending request');
@@ -78,30 +102,70 @@ function Chatbot({ data }) {
         ...newHistory,
         { sender: 'assistant', text: 'Please upload a dataset before sending a message.' },
       ]);
-      setIsLoading(false); // Reset loading state
+      setIsLoading(false);
+      setUserQuery('');
+      return;
+    }
+
+    if (!shouldGenerateChart(userQuery)) {
+      setConversationHistory([
+        ...newHistory,
+        { sender: 'assistant', text: 'Sure, let me help you with that.' },
+      ]);
+      setIsLoading(false);
       setUserQuery('');
       return;
     }
 
     const datasetInfo = getDatasetInfo(data);
     const prompt = constructPrompt(userQuery, datasetInfo);
+    const expectedFields = datasetInfo.columns;
+
+    const validationError = validateDataset(data);
+    if (validationError) {
+      setConversationHistory([
+        ...newHistory,
+        { sender: 'assistant', text: validationError },
+      ]);
+      setIsLoading(false);
+      setUserQuery('');
+      return;
+    }
 
     try {
       console.log('Sending request to server with prompt:', prompt);
+      console.log('Expected fields:', expectedFields);
 
       const response = await axios.post('http://localhost:5001/api/generate-chart', {
         prompt: prompt,
+        expectedFields: expectedFields,
       });
 
-      const { chartSpec, description } = response.data; // Correct destructuring
+      const { chartSpec, description } = response.data;
 
       console.log('Received chartSpec:', chartSpec);
       console.log('Received description:', description);
 
-      setConversationHistory([
-        ...newHistory,
-        { sender: 'assistant', text: description, chartSpec: chartSpec },
-      ]);
+      if (chartSpec && description) {
+        // Inject the actual (sampled) data into the chartSpec
+        const sampledData = sampleData(data); // Sampling the data for visualization
+        chartSpec.data = { values: sampledData };
+
+        setConversationHistory([
+          ...newHistory,
+          { sender: 'assistant', text: description, chartSpec: chartSpec },
+        ]);
+      } else if (description) {
+        setConversationHistory([
+          ...newHistory,
+          { sender: 'assistant', text: description },
+        ]);
+      } else {
+        setConversationHistory([
+          ...newHistory,
+          { sender: 'assistant', text: 'Received an unexpected response. Please try again.' },
+        ]);
+      }
       setUserQuery('');
     } catch (error) {
       console.error('Error:', error.response ? error.response.data : error.message);
@@ -122,20 +186,25 @@ function Chatbot({ data }) {
       ]);
     } finally {
       console.log('handleSendQuery: Request finished');
-      setIsLoading(false); // Reset loading state
+      setIsLoading(false);
     }
   };
 
   const handleInputKeyDown = (e) => {
     if (e.key === 'Enter') {
       console.log('handleInputKeyDown: Enter key pressed');
-      handleSendQuery();
+      e.preventDefault(); // Prevent default form submission
+      handleSendQuery(); // Call handleSendQuery directly
     }
   };
 
   return (
     <div className="flex flex-col flex-grow">
-      <div className="flex-grow overflow-y-auto p-4 rounded-lg bg-[#f0ebe6]">
+      {/* Conversation Container */}
+      <div
+        className="flex-grow overflow-y-auto p-4 rounded-lg bg-[#f0ebe6] max-h-[500px]"
+        ref={conversationContainerRef} // Attach ref here
+      >
         {conversationHistory.map((message, index) => (
           <div
             key={index}
@@ -177,11 +246,9 @@ function Chatbot({ data }) {
             </div>
           </div>
         ))}
-        <div ref={conversationEndRef} />
       </div>
 
-      {/* Removed separate chartSpec and description rendering */}
-      
+      {/* Input Area */}
       <div className="flex items-center mt-4">
         <input
           className="flex-grow p-3 border rounded-full border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4b284e] text-gray-700"
@@ -196,7 +263,7 @@ function Chatbot({ data }) {
             isLoading ? 'opacity-50 cursor-not-allowed' : ''
           }`}
           onClick={handleSendQuery}
-          disabled={isLoading} // Disable button when loading
+          disabled={isLoading}
         >
           {isLoading ? 'Sending...' : 'Send'}
         </button>
@@ -208,13 +275,15 @@ function Chatbot({ data }) {
 function getDatasetInfo(data) {
   const columns = Object.keys(data[0]);
   const dataTypes = {};
+  const sampleValues = {};
 
   columns.forEach((col) => {
     const values = data.map((row) => row[col]);
     dataTypes[col] = inferVegaLiteType(values);
+    sampleValues[col] = values.slice(0, 3);
   });
 
-  return { columns, dataTypes };
+  return { columns, dataTypes, sampleValues };
 }
 
 function inferVegaLiteType(values) {
@@ -233,7 +302,23 @@ function inferVegaLiteType(values) {
     return 'temporal';
   }
 
+  const allOrdinals = sampleValues.every(
+    (v) => typeof v === 'string' || typeof v === 'number'
+  );
+  if (allOrdinals) {
+    return 'ordinal';
+  }
+
   return 'nominal';
+}
+
+function sampleData(data, sampleSize = 1000) {
+  if (data.length <= sampleSize) {
+    return data;
+  }
+  
+  const step = Math.ceil(data.length / sampleSize);
+  return data.filter((_, index) => index % step === 0);
 }
 
 function App() {
@@ -241,11 +326,11 @@ function App() {
 
   const handleFileUploaded = (parsedData) => {
     setData(parsedData);
+    console.log('Parsed Data:', parsedData);
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#f9f5f1]">
-      {/* Header */}
       <div className="p-6">
         <h1 className="text-3xl font-semibold text-[#4b284e]">
           Data Visualization AI Assistant

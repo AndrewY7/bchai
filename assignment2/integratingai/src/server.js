@@ -1,3 +1,5 @@
+// server.js
+
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -32,7 +34,7 @@ async function callOpenAIWithRetry(prompt, retries = 3) {
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-3.5-turbo', // Correct model name
+        model: 'gpt-4o-mini', // Correct model name
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 300, // Further reduced max_tokens
         temperature: 0.7,
@@ -62,7 +64,7 @@ async function callOpenAIWithRetry(prompt, retries = 3) {
 }
 
 app.post('/api/generate-chart', async (req, res) => {
-  const { prompt } = req.body;
+  const { prompt, expectedFields } = req.body;
 
   if (!process.env.OPENAI_API_KEY) {
     console.error('Error: OPENAI_API_KEY is not set.');
@@ -70,8 +72,15 @@ app.post('/api/generate-chart', async (req, res) => {
     return;
   }
 
+  if (!prompt || !expectedFields || !Array.isArray(expectedFields)) {
+    console.error('Error: Invalid request payload.');
+    res.status(400).json({ error: 'Invalid request payload. "prompt" and "expectedFields" are required.' });
+    return;
+  }
+
   console.log(`Incoming request from ${req.ip} at ${new Date().toISOString()}`);
   console.log('Received prompt:', prompt);
+  console.log('Expected fields:', expectedFields);
 
   try {
     const response = await callOpenAIWithRetry(prompt);
@@ -80,7 +89,7 @@ app.post('/api/generate-chart', async (req, res) => {
     const assistantMessage = response.choices[0].message.content;
     console.log('Assistant message:', assistantMessage);
 
-    const { chartSpec, description } = parseAssistantResponse(assistantMessage);
+    const { chartSpec, description } = parseAssistantResponse(assistantMessage, expectedFields);
     console.log('Parsed response:', { chartSpec, description });
 
     res.json({ chartSpec, description });
@@ -112,25 +121,30 @@ app.post('/api/generate-chart', async (req, res) => {
   }
 });
 
-function parseAssistantResponse(responseText) {
+function parseAssistantResponse(responseText, expectedFields) {
   try {
     const parsedResponse = JSON.parse(responseText);
     if (parsedResponse.chartSpec && parsedResponse.description) {
-      // Validate that the fields in chartSpec match your dataset
-      const expectedFields = ["Model", "MPG", "Cylinders", "Displacement", "Horsepower", "Weight", "Acceleration", "Year", "Origin"];
+      // Ensure Vega-Lite v5 is used
+      if (!parsedResponse.chartSpec.$schema.includes('vega-lite/v5')) {
+        throw new Error('Vega-Lite specification is not using version 5.');
+      }
+
+      // Validate fields against expectedFields
       const encoding = parsedResponse.chartSpec.encoding;
-      
+
       if (encoding) {
-        const xField = encoding.x ? encoding.x.field : null;
-        const yField = encoding.y ? encoding.y.field : null;
-        if (xField && !expectedFields.includes(xField)) {
-          throw new Error(`Unexpected field in encoding.x: ${xField}`);
-        }
-        if (yField && !expectedFields.includes(yField)) {
-          throw new Error(`Unexpected field in encoding.y: ${yField}`);
+        const fieldsToCheck = ['x', 'y', 'color', 'tooltip', 'detail', 'shape', 'size', 'opacity'];
+
+        for (let enc of fieldsToCheck) {
+          if (encoding[enc]) {
+            if (encoding[enc].field && !expectedFields.includes(encoding[enc].field)) {
+              throw new Error(`Unexpected field in encoding.${enc}: ${encoding[enc].field}`);
+            }
+          }
         }
       }
-      
+
       return {
         chartSpec: parsedResponse.chartSpec,
         description: parsedResponse.description,
