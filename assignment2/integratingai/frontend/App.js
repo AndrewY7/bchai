@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { VegaLite } from 'react-vega';
 import axios from 'axios';
-import { FileUpload, DataPreview } from './csvhandle.js';
+import { FileUpload, DataPreview } from '../../../backend/csvhandle.js';
 import userAvatar from './assn1pictures/user.jpg';
 import assistantAvatar from './assn1pictures/aiassistant.jpg';
 
