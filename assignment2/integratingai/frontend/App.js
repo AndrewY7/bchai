@@ -134,7 +134,7 @@ function Chatbot({ data }) {
       console.log('Sending request to server with prompt:', prompt);
       console.log('Expected fields:', expectedFields);
 
-      const response = await axios.post('http://localhost:5001/api/generate-chart', {
+      const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/generate-chart`, {
         prompt: prompt,
         expectedFields: expectedFields,
       });
