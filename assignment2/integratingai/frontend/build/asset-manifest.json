@@ -1,0 +1,17 @@
+{
+  "files": {
+    "main.css": "/bchai/static/css/main.e019671e.css",
+    "main.js": "/bchai/static/js/main.01ed66af.js",
+    "static/js/453.8ab44547.chunk.js": "/bchai/static/js/453.8ab44547.chunk.js",
+    "static/media/user.jpg": "/bchai/static/media/user.8e952b54604525f81e22.jpg",
+    "static/media/aiassistant.jpg": "/bchai/static/media/aiassistant.7b9886cb9a6c45f0468f.jpg",
+    "index.html": "/bchai/index.html",
+    "main.e019671e.css.map": "/bchai/static/css/main.e019671e.css.map",
+    "main.01ed66af.js.map": "/bchai/static/js/main.01ed66af.js.map",
+    "453.8ab44547.chunk.js.map": "/bchai/static/js/453.8ab44547.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e019671e.css",
+    "static/js/main.01ed66af.js"
+  ]
+}
