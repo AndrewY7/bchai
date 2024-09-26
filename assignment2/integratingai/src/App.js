@@ -1,4 +1,3 @@
-// App.js
 import React, { useState, useEffect, useRef } from 'react';
 import { VegaLite } from 'react-vega';
 import axios from 'axios';
@@ -33,7 +32,6 @@ function Chatbot({ data }) {
   const [conversationHistory, setConversationHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Ref for the conversation container
   const conversationContainerRef = useRef(null);
 
   useEffect(() => {
@@ -75,7 +73,7 @@ function Chatbot({ data }) {
     if (!data || data.length === 0) {
       return 'The uploaded dataset is empty. Please provide a valid CSV file.';
     }
-    return null; // No issues
+    return null; 
   }
 
   function shouldGenerateChart(query) {
@@ -147,8 +145,7 @@ function Chatbot({ data }) {
       console.log('Received description:', description);
 
       if (chartSpec && description) {
-        // Inject the actual (sampled) data into the chartSpec
-        const sampledData = sampleData(data); // Sampling the data for visualization
+        const sampledData = sampleData(data); 
         chartSpec.data = { values: sampledData };
 
         setConversationHistory([
@@ -193,17 +190,16 @@ function Chatbot({ data }) {
   const handleInputKeyDown = (e) => {
     if (e.key === 'Enter') {
       console.log('handleInputKeyDown: Enter key pressed');
-      e.preventDefault(); // Prevent default form submission
-      handleSendQuery(); // Call handleSendQuery directly
+      e.preventDefault(); 
+      handleSendQuery(); 
     }
   };
 
   return (
     <div className="flex flex-col flex-grow">
-      {/* Conversation Container */}
       <div
         className="flex-grow overflow-y-auto p-4 rounded-lg bg-[#f0ebe6] max-h-[500px]"
-        ref={conversationContainerRef} // Attach ref here
+        ref={conversationContainerRef} 
       >
         {conversationHistory.map((message, index) => (
           <div
@@ -248,7 +244,6 @@ function Chatbot({ data }) {
         ))}
       </div>
 
-      {/* Input Area */}
       <div className="flex items-center mt-4">
         <input
           className="flex-grow p-3 border rounded-full border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4b284e] text-gray-700"

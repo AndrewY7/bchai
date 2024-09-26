@@ -1,9 +1,7 @@
-// server.js
-
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit'); // Import rate limiter
+const rateLimit = require('express-rate-limit'); 
 require('dotenv').config();
 
 const app = express();
@@ -15,28 +13,25 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Define rate limiter: maximum of 100 requests per minute
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 1 * 60 * 1000, 
+  max: 100, 
   message: {
     error: 'Too many requests from this IP, please try again after a minute.',
   },
 });
 
-// Apply rate limiter to all requests under /api/
 app.use('/api/', limiter);
 
-// Retry function with exponential backoff
 async function callOpenAIWithRetry(prompt, retries = 3) {
   try {
     console.log(`callOpenAIWithRetry: Attempting OpenAI API call. Retries left: ${retries}`);
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-4o-mini', // Correct model name
+        model: 'gpt-4o-mini', 
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 300, // Further reduced max_tokens
+        max_tokens: 300, 
         temperature: 0.7,
       },
       {
@@ -52,7 +47,7 @@ async function callOpenAIWithRetry(prompt, retries = 3) {
     if (error.response && error.response.status === 429 && retries > 0) {
       const retryAfter = error.response.headers['retry-after']
         ? parseInt(error.response.headers['retry-after'], 10) * 1000
-        : 1000; // Default to 1 second
+        : 1000;
       console.warn(`callOpenAIWithRetry: Rate limit exceeded. Retrying after ${retryAfter} ms...`);
       await new Promise((resolve) => setTimeout(resolve, retryAfter));
       return await callOpenAIWithRetry(prompt, retries - 1);
@@ -130,7 +125,6 @@ function parseAssistantResponse(responseText, expectedFields) {
         throw new Error('Vega-Lite specification is not using version 5.');
       }
 
-      // Validate fields against expectedFields
       const encoding = parsedResponse.chartSpec.encoding;
 
       if (encoding) {
@@ -158,7 +152,6 @@ function parseAssistantResponse(responseText, expectedFields) {
   }
 }
 
-// Custom error handler for JSON parsing errors
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     console.error('Bad JSON:', err.message);
